@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lays Clicker Game with Shop</title>
+<title>Lays Clicker with Shops</title>
 <style>
 body {font-family: Arial, sans-serif; background:#f5f5f5; display:flex; flex-direction:column; align-items:center; padding:40px;}
-#container {background:white; padding:30px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); text-align:center; width:420px; position:relative;}
-button {padding:12px 20px; font-size:18px; cursor:pointer; border-radius:10px; border:none; background:#f4d031; color:black; font-weight:bold;}
+#container {background:white; padding:30px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); text-align:center; width:450px; position:relative;}
+button {padding:12px 20px; font-size:18px; cursor:pointer; border-radius:10px; border:none; background:#f4d031; color:black; font-weight:bold; margin:5px;}
 input {padding:10px; width:90%; margin:10px 0; border-radius:8px; border:1px solid #ccc;}
 #lays-img {width:240px; cursor:pointer; user-select:none;}
 button:disabled {opacity:0.5; cursor:not-allowed;}
 .floating-money {position:absolute; font-weight:bold; color:#f4d031; animation:floatUp 1s ease-out forwards;}
-@keyframes floatUp {0%{opacity:1; transform:translateY(0);}100%{opacity:0; transform:translateY(-50px);}}
+@keyframes floatUp {0%{opacity:1; transform:translateY(0);}100%{opacity:0; transform:translateY:-50px);}}
 .rarity-common {color:black;}
 .rarity-uncommon {color:green;}
 .rarity-rare {color:blue;}
@@ -22,9 +22,9 @@ button:disabled {opacity:0.5; cursor:not-allowed;}
 .rarity-insane {color:red;}
 .rarity-godly {color:#00ffff;}
 .rarity-crazy {color:#ff00ff;}
-#shop {margin-top:20px;}
 .shop-item {margin:5px 0; padding:5px; border:1px solid #ccc; border-radius:8px; cursor:pointer;}
 .shop-item:hover {background:#f0f0f0;}
+#shop, #upgrade-shop {margin-top:20px; text-align:left;}
 </style>
 </head>
 <body>
@@ -35,7 +35,6 @@ button:disabled {opacity:0.5; cursor:not-allowed;}
 <input type="text" id="username" placeholder="Username">
 <input type="password" id="password" placeholder="Password">
 <button onclick="signup()">Sign Up</button>
-<br><br>
 <button onclick="login()">Login</button>
 </div>
 
@@ -44,14 +43,13 @@ button:disabled {opacity:0.5; cursor:not-allowed;}
 <img id="lays-img" src="https://i.imgur.com/8zT8Xx0.png" onclick="clickLays()">
 <p>Money: <span id="money">0</span></p>
 <p>Money Per Click: <span id="mpc">1</span></p>
-<p>Hands: <span id="hands">0</span></p>
-<hr>
-<h3>Upgrades</h3>
-<button id="buyHandBtn" onclick="buyHand()">Buy Hand (<span id="handCost">50</span>)</button><br><br>
-<button id="buyMPCBtn" onclick="buyMPC()">Upgrade Click (+1) (<span id="mpcCost">1000</span>)</button>
 
 <hr>
-<h3>Shop</h3>
+<h3>Upgrade Shop</h3>
+<div id="upgrade-shop"></div>
+
+<hr>
+<h3>Rarity Shop</h3>
 <div id="shop"></div>
 <button onclick="generateShop()">Refresh Shop</button>
 </div>
@@ -59,142 +57,139 @@ button:disabled {opacity:0.5; cursor:not-allowed;}
 
 <script>
 window.onload = function() {
-    let user = null;
-    let stats = {money:0, mpc:1, hands:0, handCost:50, mpcCost:1000};
-    const container = document.getElementById("container");
-    const rarities = [
-        {name:"common", chance:40},
-        {name:"uncommon", chance:25},
-        {name:"rare", chance:15},
-        {name:"epic", chance:8},
-        {name:"legendary", chance:5},
-        {name:"mythic", chance:3},
-        {name:"insane", chance:2},
-        {name:"godly", chance:1.5},
-        {name:"crazy", chance:0.5},
+let user = null;
+let stats = {money:0, mpc:1, hands:0, upgrades:[]};
+const container = document.getElementById("container");
+const rarities = [
+    {name:"common", chance:40},
+    {name:"uncommon", chance:25},
+    {name:"rare", chance:15},
+    {name:"epic", chance:8},
+    {name:"legendary", chance:5},
+    {name:"mythic", chance:3},
+    {name:"insane", chance:2},
+    {name:"godly", chance:1.5},
+    {name:"crazy", chance:0.5},
+];
+
+function getUsers() { return JSON.parse(localStorage.getItem("laysUsers")||"{}"); }
+function saveUsers(users) { localStorage.setItem("laysUsers", JSON.stringify(users)); }
+
+window.signup = function() {
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
+    if(!username||!password)return alert("Enter username and password!");
+    const users = getUsers();
+    if(users[username]) return alert("Username taken!");
+    users[username] = {...stats,password};
+    saveUsers(users);
+    user=username;
+    stats={...users[username]};
+    loadGame();
+}
+
+window.login = function() {
+    const username=document.getElementById("username").value.trim();
+    const password=document.getElementById("password").value.trim();
+    const users=getUsers();
+    if(!users[username]||users[username].password!==password)return alert("Invalid login!");
+    user=username;
+    stats={...users[username]};
+    loadGame();
+}
+
+function loadGame(){
+    document.getElementById("auth-section").style.display="none";
+    document.getElementById("game").style.display="block";
+    document.getElementById("greeting").textContent=`Hello, ${user}!`;
+    renderUpgradeShop();
+    generateShop();
+    updateUI();
+    setInterval(()=>{stats.money+=stats.hands;updateUI();save();},1000);
+}
+
+function createFloatingMoney(value){
+    const span=document.createElement("span");
+    span.className="floating-money";
+    span.textContent=`+${value}`;
+    const rect=document.getElementById("lays-img").getBoundingClientRect();
+    span.style.left=(rect.left+rect.width/2-container.getBoundingClientRect().left)+"px";
+    span.style.top=(rect.top-container.getBoundingClientRect().top)+"px";
+    container.appendChild(span);
+    setTimeout(()=>span.remove(),1000);
+}
+
+window.clickLays=function(){
+    stats.money+=stats.mpc;
+    createFloatingMoney(stats.mpc);
+    updateUI();
+    save();
+}
+
+// ---------------- Upgrade Shop ----------------
+function renderUpgradeShop(){
+    const div=document.getElementById("upgrade-shop");
+    div.innerHTML="";
+    const items=[
+        {name:"Hand","type":"hands","cost":50},
+        {name:"MPC Upgrade","type":"mpc","cost":1000}
     ];
+    items.forEach(item=>{
+        const btn=document.createElement("button");
+        btn.textContent=`${item.name} (${item.cost})`;
+        btn.onclick=function(){
+            if(stats.money<item.cost)return;
+            stats.money-=item.cost;
+            stats[item.type]+=item.type==="hands"?1:1;
+            item.cost=item.type==="hands"?item.cost*2:item.cost+1000;
+            renderUpgradeShop();
+            updateUI();
+            save();
+        };
+        div.appendChild(btn);
+    });
+}
 
-    function getUsers() { return JSON.parse(localStorage.getItem("laysUsers")||"{}"); }
-    function saveUsers(users) { localStorage.setItem("laysUsers", JSON.stringify(users)); }
+// ---------------- Rarity Shop ----------------
+function chooseRarity(){
+    const roll=Math.random()*100;
+    let sum=0;
+    for(const r of rarities){sum+=r.chance;if(roll<=sum)return r.name;}
+    return "common";
+}
 
-    window.signup = function() {
-        const username = document.getElementById("username").value.trim();
-        const password = document.getElementById("password").value.trim();
-        if(!username || !password) return alert("Enter username and password!");
-        const users = getUsers();
-        if(users[username]) return alert("Username taken!");
-        users[username] = {password, money:0, mpc:1, hands:0, handCost:50, mpcCost:1000};
-        saveUsers(users);
-        user = username;
-        stats = {...users[username]};
-        loadGame();
+function randomItemName(){ // generate random fun names
+    const names=["Crunchy","Salty","Cheesy","Mega","Ultra","Spicy","Golden","Epic","Crazy","Mystery"];
+    return names[Math.floor(Math.random()*names.length)]+" "+Math.floor(Math.random()*1000);
+}
+
+window.generateShop=function(){
+    const shopDiv=document.getElementById("shop");
+    shopDiv.innerHTML="";
+    for(let i=0;i<5;i++){
+        const rarity=chooseRarity();
+        const value=Math.floor(Math.random()*50)+50;
+        const type=Math.random()<0.5?"mpc":"hands";
+        const itemName=randomItemName();
+        const div=document.createElement("div");
+        div.className="shop-item rarity-"+rarity;
+        div.textContent=`${rarity.toUpperCase()} ${itemName} +${value} ${type.toUpperCase()}`;
+        div.onclick=function(){
+            if(stats.money<value)return alert("Not enough money!");
+            stats.money-=value;
+            stats[type]+=value;
+            updateUI();
+            save();
+            generateShop(); // refresh after purchase
+        };
+        shopDiv.appendChild(div);
     }
+}
 
-    window.login = function() {
-        const username = document.getElementById("username").value.trim();
-        const password = document.getElementById("password").value.trim();
-        const users = getUsers();
-        if(!users[username] || users[username].password !== password) return alert("Invalid login!");
-        user = username;
-        stats = {...users[username]};
-        loadGame();
-    }
-
-    function loadGame() {
-        document.getElementById("auth-section").style.display = "none";
-        document.getElementById("game").style.display = "block";
-        document.getElementById("greeting").textContent = `Hello, ${user}!`;
-        updateUI();
-        generateShop();
-        setInterval(() => { stats.money += stats.hands; updateUI(); save(); }, 1000);
-    }
-
-    function createFloatingMoney(value) {
-        const span = document.createElement("span");
-        span.className = "floating-money";
-        span.textContent = `+${value}`;
-        const rect = document.getElementById("lays-img").getBoundingClientRect();
-        span.style.left = (rect.left + rect.width/2 - container.getBoundingClientRect().left) + "px";
-        span.style.top = (rect.top - container.getBoundingClientRect().top) + "px";
-        container.appendChild(span);
-        setTimeout(() => span.remove(), 1000);
-    }
-
-    window.clickLays = function() { 
-        stats.money += stats.mpc; 
-        createFloatingMoney(stats.mpc);
-        updateUI(); 
-        save(); 
-    }
-
-    window.buyHand = function() {
-        if(stats.money < stats.handCost) return;
-        stats.money -= stats.handCost;
-        stats.hands++;
-        stats.handCost *= 2;
-        updateUI();
-        save();
-    }
-
-    window.buyMPC = function() {
-        if(stats.money < stats.mpcCost) return;
-        stats.money -= stats.mpcCost;
-        stats.mpc++;
-        stats.mpcCost += 1000;
-        updateUI();
-        save();
-    }
-
-    function save() {
-        if(!user) return;
-        const users = getUsers();
-        users[user] = {...users[user], ...stats};
-        saveUsers(users);
-    }
-
-    function updateUI() {
-        document.getElementById("money").textContent = stats.money;
-        document.getElementById("hands").textContent = stats.hands;
-        document.getElementById("mpc").textContent = stats.mpc;
-        document.getElementById("handCost").textContent = stats.handCost;
-        document.getElementById("mpcCost").textContent = stats.mpcCost;
-        document.getElementById("buyHandBtn").disabled = stats.money < stats.handCost;
-        document.getElementById("buyMPCBtn").disabled = stats.money < stats.mpcCost;
-    }
-
-    // ---------------- SHOP ----------------
-    function chooseRarity() {
-        const roll = Math.random()*100;
-        let sum = 0;
-        for(const r of rarities){
-            sum += r.chance;
-            if(roll <= sum) return r.name;
-        }
-        return "common";
-    }
-
-    window.generateShop = function() {
-        const shopDiv = document.getElementById("shop");
-        shopDiv.innerHTML = "";
-        for(let i=0;i<5;i++){
-            const rarity = chooseRarity();
-            const value = Math.floor(Math.random() * 50) + 50; // Upgrade value
-            const type = Math.random()<0.5?"mpc":"hands";
-            const item = document.createElement("div");
-            item.className = "shop-item rarity-"+rarity;
-            item.textContent = `${rarity.toUpperCase()} ${type.toUpperCase()} +${value}`;
-            item.onclick = function(){
-                if(stats.money < value) return alert("Not enough money!");
-                stats.money -= value;
-                if(type==="mpc") stats.mpc += value;
-                else stats.hands += value;
-                updateUI();
-                save();
-                generateShop(); // Refresh shop after purchase
-            };
-            shopDiv.appendChild(item);
-        }
-    }
+// ---------------- UI ----------------
+function updateUI(){
+    document.getElementById("money").textContent=stats.money;
+}
 };
 </script>
 </body>
